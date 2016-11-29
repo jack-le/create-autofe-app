@@ -1,15 +1,24 @@
 var gulp = require('gulp');
 var config = require('../config');
 var browserSync = require('../lib/browserSync');
-var render = require('gulp-nunjucks-render');
+// var render = require('gulp-nunjucks-render');
+var render = require('../lib/nunjucks-render');
 var data = require('gulp-data');
 var path = require('path');
 var gutil = require('gulp-util');
 
-var manageEnvironment = function(env) {
+var isRelative = function (url) {
+  if (url.indexOf('./') == 0 || url.indexOf('../') === 0) {
+    return true;
+  }
+  return false;
+}
+
+var manageEnvironment = function (env) {
   // IncludePrettyExtension
   function IncludePrettyExtension() {
     var tagName = 'includePretty';
+    this.realpath = [];
     this.tags = [tagName];
     this.parse = function (parse, nodes, lexer) {
       var tag = parse.peekToken();
@@ -37,8 +46,16 @@ var manageEnvironment = function(env) {
       var trimFilter = env.getFilter('trim');
       var safeFilter = env.getFilter('safe');
 
+      var realpath = this.realpath[0] || context.ctx.__ctx_file.path;
+
+      if (isRelative(url)) {
+        this.realpath.unshift(path.resolve(path.dirname(realpath), url));
+      } else {
+        this.realpath.unshift(path.resolve(config.src, url));
+      }
+
       try {
-        var tmpl = env.getTemplate(url);
+        var tmpl = env.getTemplate(url, false, realpath);
         var result = tmpl.render(context.getVariables());
         if (indentWidth > 0) {
           result = indentFilter(result, indentWidth);
@@ -48,6 +65,8 @@ var manageEnvironment = function(env) {
       } catch (e) {
         throw e;
       }
+
+      this.realpath.shift();
 
       return safeFilter(output);
     };
